@@ -8,21 +8,20 @@ import (
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/ltoddy/monkey/collection/set"
 )
-
-func validMethod(method string) bool {
-	methods := set.NewSetString()
-	methods.Add(http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace)
-	return methods.Contains(method)
-}
 
 func parseRawUrl(rawurl string) *url.URL {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		panic(fmt.Sprintf("invalid url(%s): %v", rawurl, u))
 	}
+	if u.Scheme == "" {
+		u.Scheme = "http"
+		if strings.Contains(u.Scheme, ":443") {
+			u.Scheme = "https"
+		}
+	}
+
 	return u
 }
 

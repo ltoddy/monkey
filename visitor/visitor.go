@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/ltoddy/monkey/options"
+	"github.com/ltoddy/monkey/verifier"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"time"
-
-	"github.com/ltoddy/monkey/options"
 )
 
 type Visitor struct {
@@ -28,7 +28,7 @@ type Visitor struct {
 }
 
 func New(opt *options.Options) *Visitor {
-	if !validMethod(opt.HttpMethod) {
+	if !verifier.ValidHttpMethod(opt.HttpMethod) {
 		log.Fatalf("net/http: invalid method %q", opt.HttpMethod)
 	}
 
@@ -43,9 +43,8 @@ func New(opt *options.Options) *Visitor {
 	}
 	client := &http.Client{
 		Transport: tr,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// always refuse to follow redirects
-			// visit doest that manually if required
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			// always refuse to follow redirects, visit doest that manually if required
 			return http.ErrUseLastResponse
 		},
 	}
