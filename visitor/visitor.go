@@ -4,17 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httptrace"
-	"net/url"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/ltoddy/monkey/collection/set"
 	"github.com/ltoddy/monkey/options"
 )
 
@@ -131,36 +126,4 @@ func (v *Visitor) _RecordTLSHandshakeStart() {
 
 func (v *Visitor) _RecordTLSHandshakeDone(_ tls.ConnectionState, _ error) {
 	v.TLSHandshakeDoneAt = time.Now()
-}
-
-func validMethod(method string) bool {
-	methods := set.NewSetString()
-	methods.Add(http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace)
-	return methods.Contains(method)
-}
-
-func parseRawUrl(rawurl string) *url.URL {
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		panic(fmt.Sprintf("invalid url(%s): %v", rawurl, u))
-	}
-	return u
-}
-
-func makeRequest(method string, url *url.URL, body string) *http.Request {
-	var reader io.Reader = strings.NewReader(body)
-	if strings.HasPrefix(body, "@") {
-		filename := body[1:]
-		f, err := os.Open(filename)
-		if err != nil {
-			log.Fatalf("failed to open data file %s: %v", filename, err)
-		}
-		reader = f
-	}
-
-	request, err := http.NewRequest(method, url.String(), reader)
-	if err != nil {
-		log.Fatalf("unable to create request: %v", err)
-	}
-	return request
 }
