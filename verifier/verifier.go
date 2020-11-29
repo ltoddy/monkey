@@ -1,8 +1,9 @@
 package verifier
 
 import (
-	"github.com/ltoddy/monkey/collection/set"
 	"net/http"
+
+	"github.com/ltoddy/monkey/collection/set"
 )
 
 func ValidHttpMethod(method string) bool {
