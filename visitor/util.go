@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func parseRawUrl(rawurl string) *url.URL {
+func ParseRawUrl(rawurl string) *url.URL {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		panic(fmt.Sprintf("invalid url(%s): %v", rawurl, u))
@@ -41,4 +41,8 @@ func makeRequest(method string, url *url.URL, body string) *http.Request {
 		log.Fatalf("unable to create request: %v", err)
 	}
 	return request
+}
+
+func isRedirect(response *http.Response) bool {
+	return response.StatusCode <= 400 && response.StatusCode >= 300
 }

@@ -8,15 +8,18 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"time"
 
-	"github.com/ltoddy/monkey/options"
+	"github.com/ltoddy/monkey/constants"
+	"github.com/ltoddy/monkey/prettyprint"
 	"github.com/ltoddy/monkey/verifier"
 )
 
 type Visitor struct {
-	opt        *options.Options
-	httpclient *http.Client
+	config           *Config
+	httpclient       *http.Client
+	currentRedirects int
 
 	DNSStartAt             time.Time // when a DNS lookup begins.
 	DNSDoneAt              time.Time // when a DNS lookup ends.
@@ -34,9 +37,9 @@ type Visitor struct {
 	WroteRequestAt         time.Time
 }
 
-func New(opt *options.Options) *Visitor {
-	if !verifier.ValidHttpMethod(opt.HttpMethod) {
-		log.Fatalf("net/http: invalid method %q", opt.HttpMethod)
+func New(config *Config) *Visitor {
+	if !verifier.ValidHttpMethod(config.HttpMethod) {
+		log.Fatalf("net/http: invalid method %q", config.HttpMethod)
 	}
 
 	tr := &http.Transport{
@@ -56,10 +59,10 @@ func New(opt *options.Options) *Visitor {
 		},
 	}
 
-	return &Visitor{opt: opt, httpclient: client}
+	return &Visitor{config: config, currentRedirects: 0, httpclient: client}
 }
 
-func (v *Visitor) Visit() {
+func (v *Visitor) Visit(url_ *url.URL) {
 	trance := &httptrace.ClientTrace{
 		DNSStart:             v._RecordDNSStart,
 		DNSDone:              v._RecordDNSDone,
@@ -79,27 +82,40 @@ func (v *Visitor) Visit() {
 		//Got1xxResponse:   nil,
 	}
 
-	u := parseRawUrl(v.opt.RawUrl)
-	request := makeRequest(v.opt.HttpMethod, u, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
+	request := makeRequest(v.config.HttpMethod, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
 	response, err := v.httpclient.Do(request)
+	defer func() { _ = response.Body.Close() }()
 	if err != nil {
 		log.Fatalf("fetch failed: %v", err)
 	}
 
 	fmt.Println(response.Status)
-	fmt.Printf("dns start at:               %v\n", v.DNSStartAt)
-	fmt.Printf("dns done at:                %v\n", v.DNSDoneAt)
-	fmt.Printf("connect start at:           %v\n", v.ConnectStartAt)
-	fmt.Printf("connect done at:            %v\n", v.ConnectDoneAt)
-	fmt.Printf("got connect at:             %v\n", v.GotConnAt)
-	fmt.Printf("got first response byte at: %v\n", v.GotFirstResponseByteAt)
-	fmt.Printf("tls hand shark start at:    %v\n", v.TLSHandshakeStartAt)
-	fmt.Printf("tls hand shake done at:     %v\n", v.TLSHandshakeDoneAt)
-	fmt.Printf("got 100 continue at:        %v\n", v.Got100ContinueAt)
-	fmt.Printf("wait 100 continue at:       %v\n", v.Wait100ContinueAt)
-	fmt.Printf("wrote header field at:      %v\n", v.WroteHeaderFieldAt)
-	fmt.Printf("wrote headers at:           %v\n", v.WroteHeadersAt)
-	fmt.Printf("wrote request at:           %v\n", v.WroteRequestAt)
+	fmt.Println()
+	fmt.Println(prettyprint.PrettyFormatHeader(response.Header))
+	fmt.Println()
+	//content, err := ioutil.ReadAll(response.Body)
+	//if err != nil {
+	//	log.Fatalf("read response body failed: %v", err)
+	//}
+	//fmt.Println(string(content))
+	fmt.Println()
+
+	if isRedirect(response) && v.config.FollowRedirect {
+		u, err := response.Location()
+		if err != nil {
+			if err == http.ErrNoLocation {
+				return
+			}
+			log.Fatalf("unable to follow redirect: %v", err)
+		}
+
+		v.currentRedirects += 1
+		if v.currentRedirects > constants.MaxRedirects {
+			log.Fatalf("maximum number of redirects (%d) followed", constants.MaxRedirects)
+		}
+
+		v.Visit(u)
+	}
 }
 
 func (v *Visitor) _RecordDNSStart(_ httptrace.DNSStartInfo) {
