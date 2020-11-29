@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"github.com/ltoddy/monkey/options"
+	"github.com/ltoddy/monkey/visitor"
+)
 
 func main() {
-	fmt.Println("Hello world")
+	opt := options.FromArgs()
+	v := visitor.New(opt)
+	v.Visit()
 }
