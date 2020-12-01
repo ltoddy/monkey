@@ -5,4 +5,5 @@ type Config struct {
 	HttpMethod     string
 	Include        bool
 	MaxRedirects   int
+	Headers        []string
 }

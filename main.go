@@ -14,6 +14,7 @@ func main() {
 		HttpMethod:     opt.HttpMethod,
 		Include:        opt.Include,
 		MaxRedirects:   30,
+		Headers:        opt.Headers,
 	}
 	v := visitor.New(config, logger.New(opt.Verbose))
 	url_ := visitor.ParseRawUrl(opt.RawUrl)

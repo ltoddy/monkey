@@ -85,6 +85,15 @@ func (v *Visitor) Visit(url_ *url.URL) {
 	}
 
 	request := makeRequest(v.config.HttpMethod, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
+	for _, h := range v.config.Headers {
+		if key, value := headerToKeyValue(h); key == "" || value == "" {
+			v.logger.Printf("ignore invalid header: %s\n", h)
+			continue
+		} else {
+			request.Header.Set(key, value)
+		}
+	}
+
 	response, err := v.httpclient.Do(request)
 	defer func() { _ = response.Body.Close() }()
 	if err != nil {

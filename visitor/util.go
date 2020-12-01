@@ -25,6 +25,14 @@ func ParseRawUrl(rawurl string) *url.URL {
 	return u
 }
 
+func headerToKeyValue(h string) (string, string) {
+	idx := strings.Index(h, ":")
+	if idx == -1 {
+		return "", ""
+	}
+	return strings.TrimRight(h[:idx], " "), strings.TrimLeft(h[idx:], " :")
+}
+
 func makeRequest(method string, url *url.URL, body string) *http.Request {
 	var reader io.Reader = strings.NewReader(body)
 	if strings.HasPrefix(body, "@") {

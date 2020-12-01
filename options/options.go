@@ -3,7 +3,23 @@ package options
 import (
 	"flag"
 	"net/http"
+	"strings"
 )
+
+type headers []string
+
+func (h headers) String() string {
+	var value []string
+	for _, v := range h {
+		value = append(value, "-H "+v)
+	}
+	return strings.Join(value, " ")
+}
+
+func (h *headers) Set(s string) error {
+	*h = append(*h, s)
+	return nil
+}
 
 type Options struct {
 	Verbose        bool
@@ -11,7 +27,7 @@ type Options struct {
 	HttpMethod     string
 	Include        bool
 	FollowRedirect bool
-	Headers        []string
+	Headers        headers
 }
 
 func FromArgs() *Options {
@@ -21,6 +37,7 @@ func FromArgs() *Options {
 	flag.StringVar(&options.HttpMethod, "X", http.MethodGet, "HTTP method to use")
 	flag.BoolVar(&options.Include, "i", false, "Include protocol response headers in the output")
 	flag.BoolVar(&options.FollowRedirect, "L", false, "Follow redirects")
+	flag.Var(&options.Headers, "H", "Pass custom header(s) to server")
 	flag.Parse()
 
 	args := flag.Args()
