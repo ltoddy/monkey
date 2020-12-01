@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/ltoddy/monkey/constants"
-	"github.com/ltoddy/monkey/prettyprint"
+	"github.com/ltoddy/monkey/logger"
+	"github.com/ltoddy/monkey/printer"
 	"github.com/ltoddy/monkey/verifier"
 )
 
@@ -20,6 +21,7 @@ type Visitor struct {
 	config           *Config
 	httpclient       *http.Client
 	currentRedirects int
+	logger           *logger.Logger
 
 	DNSStartAt             time.Time // when a DNS lookup begins.
 	DNSDoneAt              time.Time // when a DNS lookup ends.
@@ -37,7 +39,7 @@ type Visitor struct {
 	WroteRequestAt         time.Time
 }
 
-func New(config *Config) *Visitor {
+func New(config *Config, logger *logger.Logger) *Visitor {
 	if !verifier.ValidHttpMethod(config.HttpMethod) {
 		log.Fatalf("net/http: invalid method %q", config.HttpMethod)
 	}
@@ -59,7 +61,7 @@ func New(config *Config) *Visitor {
 		},
 	}
 
-	return &Visitor{config: config, currentRedirects: 0, httpclient: client}
+	return &Visitor{config: config, httpclient: client, currentRedirects: 0, logger: logger}
 }
 
 func (v *Visitor) Visit(url_ *url.URL) {
@@ -89,16 +91,10 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		log.Fatalf("fetch failed: %v", err)
 	}
 
-	fmt.Println(response.Status)
+	fmt.Printf("%s %s\n", response.Proto, response.Status)
 	fmt.Println()
-	fmt.Println(prettyprint.PrettyFormatHeader(response.Header))
-	fmt.Println()
-	//content, err := ioutil.ReadAll(response.Body)
-	//if err != nil {
-	//	log.Fatalf("read response body failed: %v", err)
-	//}
-	//fmt.Println(string(content))
-	fmt.Println()
+	printer.PrintHeader(response.Header, v.config.Include)
+	printer.PrintBody(response.Body)
 
 	if isRedirect(response) && v.config.FollowRedirect {
 		u, err := response.Location()
