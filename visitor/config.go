@@ -2,7 +2,7 @@ package visitor
 
 type Config struct {
 	FollowRedirect bool
-	HttpMethod     string
+	Method         string
 	Include        bool
 	MaxRedirects   int
 	Headers        []string

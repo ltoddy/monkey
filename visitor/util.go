@@ -55,8 +55,14 @@ func isRedirect(response *http.Response) bool {
 	return response.StatusCode <= 400 && response.StatusCode >= 300
 }
 
-const layout = "15:04:05.000000"
+const layout = "15:04:05.000"
 
 func formatTime(t time.Time) string {
 	return t.Format(layout)
+}
+
+func formatDuration(d time.Duration) string {
+	d -= d / time.Hour * time.Hour
+	d -= d / time.Minute * time.Minute
+	return d.String()
 }

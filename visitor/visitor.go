@@ -41,8 +41,8 @@ type Visitor struct {
 }
 
 func New(config *Config, logger *logger.Logger) *Visitor {
-	if !verifier.ValidHttpMethod(config.HttpMethod) {
-		log.Fatalf("net/http: invalid method %q", config.HttpMethod)
+	if !verifier.ValidHttpMethod(config.Method) {
+		log.Fatalf("net/http: invalid method %q", config.Method)
 	}
 
 	tr := &http.Transport{
@@ -85,7 +85,7 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		//Got1xxResponse:   nil,
 	}
 
-	request := makeRequest(v.config.HttpMethod, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
+	request := makeRequest(v.config.Method, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
 	for _, h := range v.config.Headers {
 		if key, value := headerToKeyValue(h); key == "" || value == "" {
 			v.logger.Printf("ignore invalid header: %s\n", h)
@@ -101,6 +101,7 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		v.logger.Fatalln(err)
 	}
 
+	v.PrintTraceTimes()
 	fmt.Printf("%s %s\n", response.Proto, response.Status)
 	fmt.Println()
 	printer.PrintHeader(response.Header, v.config.Include)
@@ -210,3 +211,35 @@ func (v *Visitor) _RecordGotFirstResponseByte() {
 	v.GotFirstResponseByteAt = time.Now()
 	v.logger.Printf("Start receiving response at: %v\n", formatTime(v.GotFirstResponseByteAt))
 }
+
+const HttpRequestTemplate = `            DNS Lookup                           TCP Connect                           Server Processing                           Content Transfer
+%-15v    %15v |                                    |                                    |                                           |
+        <- %-10v ->           |                                    |                                    |
+                                   | %-15v    %15v |                                    |
+                                   |         <- %-10v ->          |                                   |
+                                   |                                    | %-15v    %15v |
+                                   |                                    |         <- %-10v ->          |
+`
+
+func (v *Visitor) PrintTraceTimes() {
+	fmt.Printf(
+		HttpRequestTemplate,
+		formatTime(v.DNSStartAt), formatTime(v.DNSDoneAt), formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),
+		formatTime(v.ConnectStartAt), formatTime(v.ConnectDoneAt), formatDuration(v.ConnectDoneAt.Sub(v.ConnectStartAt)),
+		formatTime(v.GotConnAt), formatTime(v.GotFirstResponseByteAt), formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),
+	)
+	fmt.Println()
+}
+
+/*
+GetConnAt              time.Time // before a connection is created
+GotConnAt              time.Time // after a successful connection is obtained.
+GotFirstResponseByteAt time.Time // when the first byte of the response headers is available.
+TLSHandshakeStartAt    time.Time // when the TLS handshake is started.
+TLSHandshakeDoneAt     time.Time // after the TLS handshake.
+Got100ContinueAt       time.Time // if the server replies with a "100 Continue" response.
+Wait100ContinueAt      time.Time //
+WroteHeaderFieldAt     time.Time // after the Transport has written each request header.
+WroteHeadersAt         time.Time // after the Transport has written all request headers.
+WroteRequestAt         time.Time
+*/
