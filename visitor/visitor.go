@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ltoddy/monkey/constants"
@@ -97,7 +98,7 @@ func (v *Visitor) Visit(url_ *url.URL) {
 	response, err := v.httpclient.Do(request)
 	defer func() { _ = response.Body.Close() }()
 	if err != nil {
-		log.Fatalf("fetch failed: %v", err)
+		v.logger.Fatalln(err)
 	}
 
 	fmt.Printf("%s %s\n", response.Proto, response.Status)
@@ -123,63 +124,89 @@ func (v *Visitor) Visit(url_ *url.URL) {
 	}
 }
 
-func (v *Visitor) _RecordDNSStart(_ httptrace.DNSStartInfo) {
+func (v *Visitor) _RecordDNSStart(info httptrace.DNSStartInfo) {
 	v.DNSStartAt = time.Now()
+	v.logger.Printf("DNS request is: %v, start at: %v\n", info.Host, formatTime(v.DNSStartAt))
 }
 
-func (v *Visitor) _RecordDNSDone(_ httptrace.DNSDoneInfo) {
+func (v *Visitor) _RecordDNSDone(info httptrace.DNSDoneInfo) {
 	v.DNSDoneAt = time.Now()
+	for _, addr := range info.Addrs {
+		v.logger.Printf("DNS lookup: %s\n", addr.String())
+	}
+	v.logger.Printf("DNS done at: %v.\n", formatTime(v.DNSDoneAt))
 }
 
-func (v *Visitor) _RecordConnectStart(_, _ string) {
+func (v *Visitor) _RecordConnectStart(network, addr string) {
 	v.ConnectStartAt = time.Now()
+	v.logger.Printf("Connect to %v(%v), at: %v\n", addr, network, formatTime(v.ConnectStartAt))
 }
 
 func (v *Visitor) _RecordConnectDone(network, addr string, err error) {
 	if err != nil {
-		log.Fatalf("unable to connect to host %v: %v", addr, err)
+		v.logger.Fatalln(err)
 	}
 
 	v.ConnectDoneAt = time.Now()
-	fmt.Printf("Connect to %s\n", addr)
+	v.logger.Printf("Connect to %v(%v) done, at: %v\n", addr, network, formatTime(v.ConnectDoneAt))
 }
 
 func (v *Visitor) _RecordGetConn(_ string) {
 	v.GetConnAt = time.Now()
 }
 
-func (v *Visitor) _RecordGotConn(_ httptrace.GotConnInfo) {
+func (v *Visitor) _RecordGotConn(info httptrace.GotConnInfo) {
 	v.GotConnAt = time.Now()
-}
-
-func (v *Visitor) _RecordGotFirstResponseByte() {
-	v.GotFirstResponseByteAt = time.Now()
+	v.logger.Printf("Got connection %v <-> %v, idle %v, at: %v\n", info.Conn.LocalAddr(), info.Conn.RemoteAddr(), info.IdleTime, formatTime(v.GotConnAt))
 }
 
 func (v *Visitor) _RecordTLSHandshakeStart() {
 	v.TLSHandshakeStartAt = time.Now()
+	if !v.TLSHandshakeStartAt.IsZero() {
+		v.logger.Printf("TLS handshake start at: %v\n", formatTime(v.TLSHandshakeStartAt))
+	}
 }
 
-func (v *Visitor) _RecordTLSHandshakeDone(_ tls.ConnectionState, _ error) {
+func (v *Visitor) _RecordTLSHandshakeDone(state tls.ConnectionState, err error) {
 	v.TLSHandshakeDoneAt = time.Now()
+	if !v.TLSHandshakeDoneAt.IsZero() {
+		v.logger.Printf("TLS handshake done at: %v\n", formatTime(v.TLSHandshakeDoneAt))
+	}
 }
 
 func (v *Visitor) _RecordGot100Continue() {
 	v.Got100ContinueAt = time.Now()
+	if !v.Got100ContinueAt.IsZero() {
+		v.logger.Printf("Got 100(continue) status code at: %v\n", formatTime(v.Got100ContinueAt))
+	}
 }
 
 func (v *Visitor) _RecordWait100Continue() {
 	v.Wait100ContinueAt = time.Now()
+	if !v.Wait100ContinueAt.IsZero() {
+		v.logger.Printf("Wait 100(continue) status code at: %v\n", formatTime(v.Wait100ContinueAt))
+	}
 }
 
-func (v *Visitor) _RecordWroteHeaderField(_ string, _ []string) {
+func (v *Visitor) _RecordWroteHeaderField(key string, value []string) {
 	v.WroteHeaderFieldAt = time.Now()
+	v.logger.Printf("Wrote header field (%s: %s) at: %v\n", key, strings.Join(value, ", "), formatTime(v.WroteHeaderFieldAt))
 }
 
 func (v *Visitor) _RecordWroteHeaders() {
 	v.WroteHeadersAt = time.Now()
+	v.logger.Printf("Wrote headers done at: %v\n", formatTime(v.WroteHeadersAt))
 }
 
-func (v *Visitor) _RecordWroteRequest(_ httptrace.WroteRequestInfo) {
+func (v *Visitor) _RecordWroteRequest(info httptrace.WroteRequestInfo) {
 	v.WroteRequestAt = time.Now()
+	v.logger.Printf("Wrote request at: %v\n", formatTime(v.WroteRequestAt))
+	if info.Err != nil {
+		log.Fatalf("Wrote request failed: %v\n", info.Err)
+	}
+}
+
+func (v *Visitor) _RecordGotFirstResponseByte() {
+	v.GotFirstResponseByteAt = time.Now()
+	v.logger.Printf("Start receiving response at: %v\n", formatTime(v.GotFirstResponseByteAt))
 }

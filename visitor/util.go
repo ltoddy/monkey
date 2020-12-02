@@ -1,19 +1,19 @@
 package visitor
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 func ParseRawUrl(rawurl string) *url.URL {
 	u, err := url.Parse(rawurl)
 	if err != nil {
-		panic(fmt.Sprintf("invalid url(%s): %v", rawurl, u))
+		log.Fatalf("invalid url(%s): %v", rawurl, u)
 	}
 	if u.Scheme == "" {
 		u.Scheme = "http"
@@ -53,4 +53,10 @@ func makeRequest(method string, url *url.URL, body string) *http.Request {
 
 func isRedirect(response *http.Response) bool {
 	return response.StatusCode <= 400 && response.StatusCode >= 300
+}
+
+const layout = "15:04:05.000000"
+
+func formatTime(t time.Time) string {
+	return t.Format(layout)
 }
