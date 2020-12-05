@@ -1,11 +1,13 @@
 package visitor
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -55,8 +57,16 @@ func isRedirect(response *http.Response) bool {
 	return response.StatusCode <= 400 && response.StatusCode >= 300
 }
 
-const layout = "15:04:05.000000"
+const layout = "15:04:05.000"
 
 func formatTime(t time.Time) string {
 	return t.Format(layout)
+}
+
+func formatDuration(d time.Duration) string {
+	return fmt.Sprintf("%7dms", int(d/time.Millisecond))
+}
+
+func formatDuration2(d time.Duration) string {
+	return fmt.Sprintf("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
 }

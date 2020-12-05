@@ -41,8 +41,8 @@ type Visitor struct {
 }
 
 func New(config *Config, logger *logger.Logger) *Visitor {
-	if !verifier.ValidHttpMethod(config.HttpMethod) {
-		log.Fatalf("net/http: invalid method %q", config.HttpMethod)
+	if !verifier.ValidHttpMethod(config.Method) {
+		log.Fatalf("net/http: invalid method %q", config.Method)
 	}
 
 	tr := &http.Transport{
@@ -85,7 +85,7 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		//Got1xxResponse:   nil,
 	}
 
-	request := makeRequest(v.config.HttpMethod, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
+	request := makeRequest(v.config.Method, url_, "").WithContext(httptrace.WithClientTrace(context.Background(), trance))
 	for _, h := range v.config.Headers {
 		if key, value := headerToKeyValue(h); key == "" || value == "" {
 			v.logger.Printf("ignore invalid header: %s\n", h)
@@ -101,8 +101,8 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		v.logger.Fatalln(err)
 	}
 
+	v.PrintTraceTimes()
 	fmt.Printf("%s %s\n", response.Proto, response.Status)
-	fmt.Println()
 	printer.PrintHeader(response.Header, v.config.Include)
 	printer.PrintBody(response.Body)
 
@@ -138,6 +138,9 @@ func (v *Visitor) _RecordDNSDone(info httptrace.DNSDoneInfo) {
 }
 
 func (v *Visitor) _RecordConnectStart(network, addr string) {
+	if v.DNSDoneAt.IsZero() {
+		v.DNSDoneAt = time.Now()
+	}
 	v.ConnectStartAt = time.Now()
 	v.logger.Printf("Connect to %v(%v), at: %v\n", addr, network, formatTime(v.ConnectStartAt))
 }
@@ -209,4 +212,37 @@ func (v *Visitor) _RecordWroteRequest(info httptrace.WroteRequestInfo) {
 func (v *Visitor) _RecordGotFirstResponseByte() {
 	v.GotFirstResponseByteAt = time.Now()
 	v.logger.Printf("Start receiving response at: %v\n", formatTime(v.GotFirstResponseByteAt))
+}
+
+const httpTemplate = `` +
+	`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
+	`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
+	`             |                |                   |                  |` + "\n" +
+	`    namelookup:%s      |                   |                  |` + "\n" +
+	`                        connect:%s         |                  |` + "\n" +
+	`                                      starttransfer:%s        |` + "\n" +
+	`                                                                 total:%s` + "\n"
+
+const HttpRequestTemplate = `            DNS Lookup                           TCP Connect                           Server Processing                           Content Transfer
+%-15v    %15v |                                    |                                    |                                           |
+        <- %-10v ->           |                                    |                                    |
+                                   | %-15v    %15v |                                    |
+                                   |         <- %-10v ->          |                                   |
+                                   |                                    | %-15v    %15v |
+                                   |                                    |         <- %-10v ->          |
+`
+
+func (v *Visitor) PrintTraceTimes() {
+	fmt.Printf(
+		httpTemplate,
+		formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),               // dns lookup
+		formatDuration(v.GotConnAt.Sub(v.DNSStartAt)),               // tcp connection
+		formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),   // server processing
+		formatDuration(time.Now().Sub(v.GotConnAt)),                 // content transfer
+		formatDuration2(v.DNSDoneAt.Sub(v.DNSDoneAt)),               // name lookup
+		formatDuration2(v.GotConnAt.Sub(v.DNSStartAt)),              // connect
+		formatDuration2(v.GotFirstResponseByteAt.Sub(v.DNSStartAt)), // start transfer
+		formatDuration2(time.Now().Sub(v.DNSStartAt)),               // total
+	)
+	fmt.Println()
 }

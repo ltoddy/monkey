@@ -11,7 +11,7 @@ func main() {
 
 	config := &visitor.Config{
 		FollowRedirect: opt.FollowRedirect,
-		HttpMethod:     opt.HttpMethod,
+		Method:         opt.Method,
 		Include:        opt.Include,
 		MaxRedirects:   30,
 		Headers:        opt.Headers,
