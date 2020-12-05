@@ -103,7 +103,6 @@ func (v *Visitor) Visit(url_ *url.URL) {
 
 	v.PrintTraceTimes()
 	fmt.Printf("%s %s\n", response.Proto, response.Status)
-	fmt.Println()
 	printer.PrintHeader(response.Header, v.config.Include)
 	printer.PrintBody(response.Body)
 
@@ -139,6 +138,9 @@ func (v *Visitor) _RecordDNSDone(info httptrace.DNSDoneInfo) {
 }
 
 func (v *Visitor) _RecordConnectStart(network, addr string) {
+	if v.DNSDoneAt.IsZero() {
+		v.DNSDoneAt = time.Now()
+	}
 	v.ConnectStartAt = time.Now()
 	v.logger.Printf("Connect to %v(%v), at: %v\n", addr, network, formatTime(v.ConnectStartAt))
 }
@@ -212,6 +214,15 @@ func (v *Visitor) _RecordGotFirstResponseByte() {
 	v.logger.Printf("Start receiving response at: %v\n", formatTime(v.GotFirstResponseByteAt))
 }
 
+const httpTemplate = `` +
+	`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
+	`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
+	`             |                |                   |                  |` + "\n" +
+	`    namelookup:%s      |                   |                  |` + "\n" +
+	`                        connect:%s         |                  |` + "\n" +
+	`                                      starttransfer:%s        |` + "\n" +
+	`                                                                 total:%s` + "\n"
+
 const HttpRequestTemplate = `            DNS Lookup                           TCP Connect                           Server Processing                           Content Transfer
 %-15v    %15v |                                    |                                    |                                           |
         <- %-10v ->           |                                    |                                    |
@@ -223,23 +234,30 @@ const HttpRequestTemplate = `            DNS Lookup                           TC
 
 func (v *Visitor) PrintTraceTimes() {
 	fmt.Printf(
-		HttpRequestTemplate,
-		formatTime(v.DNSStartAt), formatTime(v.DNSDoneAt), formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),
-		formatTime(v.ConnectStartAt), formatTime(v.ConnectDoneAt), formatDuration(v.ConnectDoneAt.Sub(v.ConnectStartAt)),
-		formatTime(v.GotConnAt), formatTime(v.GotFirstResponseByteAt), formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),
+		httpTemplate,
+		formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),               // dns lookup
+		formatDuration(v.GotConnAt.Sub(v.DNSStartAt)),               // tcp connection
+		formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),   // server processing
+		formatDuration(time.Now().Sub(v.GotConnAt)),                 // content transfer
+		formatDuration2(v.DNSDoneAt.Sub(v.DNSDoneAt)),               // name lookup
+		formatDuration2(v.GotConnAt.Sub(v.DNSStartAt)),              // connect
+		formatDuration2(v.GotFirstResponseByteAt.Sub(v.DNSStartAt)), // start transfer
+		formatDuration2(time.Now().Sub(v.DNSStartAt)),               // total
 	)
 	fmt.Println()
 }
 
 /*
-GetConnAt              time.Time // before a connection is created
-GotConnAt              time.Time // after a successful connection is obtained.
-GotFirstResponseByteAt time.Time // when the first byte of the response headers is available.
-TLSHandshakeStartAt    time.Time // when the TLS handshake is started.
-TLSHandshakeDoneAt     time.Time // after the TLS handshake.
-Got100ContinueAt       time.Time // if the server replies with a "100 Continue" response.
-Wait100ContinueAt      time.Time //
-WroteHeaderFieldAt     time.Time // after the Transport has written each request header.
-WroteHeadersAt         time.Time // after the Transport has written all request headers.
-WroteRequestAt         time.Time
+printf(colorize(httpTemplate),
+	fmta(t1.Sub(t0)), // dns lookup
+	fmta(t3.Sub(t1)), // tcp connection
+	fmta(t4.Sub(t3)), // server processing
+	fmta(t7.Sub(t4)), // content transfer
+	fmtb(t1.Sub(t0)), // namelookup
+	fmtb(t3.Sub(t0)), // connect
+
+	fmtb(t4.Sub(t0)), // starttransfer
+	fmtb(t7.Sub(t0)), // total
+)
+
 */

@@ -1,11 +1,13 @@
 package visitor
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -62,7 +64,9 @@ func formatTime(t time.Time) string {
 }
 
 func formatDuration(d time.Duration) string {
-	d -= d / time.Hour * time.Hour
-	d -= d / time.Minute * time.Minute
-	return d.String()
+	return fmt.Sprintf("%7dms", int(d/time.Millisecond))
+}
+
+func formatDuration2(d time.Duration) string {
+	return fmt.Sprintf("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
 }
