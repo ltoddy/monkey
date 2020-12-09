@@ -1,6 +1,11 @@
 package logger
 
-import "log"
+import (
+	"fmt"
+	"log"
+
+	"github.com/ltoddy/monkey/colored"
+)
 
 type Logger struct {
 	verbose bool
@@ -10,32 +15,12 @@ func New(verbose bool) *Logger {
 	return &Logger{verbose: verbose}
 }
 
-func (logger *Logger) Print(v ...interface{}) {
+func (logger *Logger) Println(format string, v ...interface{}) {
 	if logger.verbose {
-		log.Print(v...)
+		log.Println(colored.Cyan(fmt.Sprintf(format, v...)))
 	}
 }
 
-func (logger *Logger) Printf(format string, v ...interface{}) {
-	if logger.verbose {
-		log.Printf(format, v...)
-	}
-}
-
-func (logger *Logger) Println(v ...interface{}) {
-	if logger.verbose {
-		log.Println(v...)
-	}
-}
-
-func (logger *Logger) Fatal(v ...interface{}) {
-	log.Fatal(v...)
-}
-
-func (logger *Logger) Fatalf(format string, v ...interface{}) {
-	log.Fatalf(format, v...)
-}
-
-func (logger *Logger) Fatalln(v ...interface{}) {
-	log.Fatalln(v...)
+func (logger *Logger) Fatalln(format string, v ...interface{}) {
+	log.Fatalln(colored.Red(fmt.Sprintf(format, v...)))
 }
