@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/ltoddy/monkey/colored"
 	"log"
 	"net"
 	"net/http"
@@ -101,8 +102,8 @@ func (v *Visitor) Visit(url_ *url.URL) {
 		v.logger.Fatalln("%v", err)
 	}
 
-	v.PrintTraceTimes()
-	fmt.Println("%s %s", response.Proto, response.Status)
+	v.PrintTraceTimes(request.URL.Scheme == "https")
+	fmt.Printf("%s %s\n", response.Proto, response.Status)
 	printer.PrintHeader(response.Header, v.config.Include)
 	printer.PrintBody(response.Body)
 
@@ -170,7 +171,7 @@ func (v *Visitor) _RecordTLSHandshakeStart() {
 	}
 }
 
-func (v *Visitor) _RecordTLSHandshakeDone(state tls.ConnectionState, err error) {
+func (v *Visitor) _RecordTLSHandshakeDone(_ tls.ConnectionState, _ error) {
 	v.TLSHandshakeDoneAt = time.Now()
 	if !v.TLSHandshakeDoneAt.IsZero() {
 		v.logger.Println("TLS handshake done at: %v", formatTime(v.TLSHandshakeDoneAt))
@@ -214,35 +215,54 @@ func (v *Visitor) _RecordGotFirstResponseByte() {
 	v.logger.Println("Start receiving response at: %v", formatTime(v.GotFirstResponseByteAt))
 }
 
-const httpTemplate = `` +
-	`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
-	`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
-	`             |                |                   |                  |` + "\n" +
-	`    namelookup:%s      |                   |                  |` + "\n" +
-	`                        connect:%s         |                  |` + "\n" +
-	`                                      starttransfer:%s        |` + "\n" +
-	`                                                                 total:%s` + "\n"
+const (
+	HttpsRequestTemplate = `` +
+		`  DNS Lookup   TCP Connection   TLS Handshake   Server Processing   Content Transfer` + "\n" +
+		`[%s  |     %s  |    %s  |        %s  |       %s  ]` + "\n" +
+		`            |                |               |                   |                  |` + "\n" +
+		`   namelookup:%s      |               |                   |                  |` + "\n" +
+		`                       connect:%s     |                   |                  |` + "\n" +
+		`                                   pretransfer:%s         |                  |` + "\n" +
+		`                                                     starttransfer:%s        |` + "\n" +
+		`                                                                                total:%s` + "\n"
 
-const HttpRequestTemplate = `            DNS Lookup                           TCP Connect                           Server Processing                           Content Transfer
-%-15v    %15v |                                    |                                    |                                           |
-        <- %-10v ->           |                                    |                                    |
-                                   | %-15v    %15v |                                    |
-                                   |         <- %-10v ->          |                                   |
-                                   |                                    | %-15v    %15v |
-                                   |                                    |         <- %-10v ->          |
-`
+	HttpRequestTemplate = `` +
+		`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
+		`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
+		`             |                |                   |                  |` + "\n" +
+		`    namelookup:%s      |                   |                  |` + "\n" +
+		`                        connect:%s         |                  |` + "\n" +
+		`                                      starttransfer:%s        |` + "\n" +
+		`                                                                 total:%s` + "\n"
+)
 
-func (v *Visitor) PrintTraceTimes() {
-	fmt.Println(
-		httpTemplate,
-		formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),               // dns lookup
-		formatDuration(v.GotConnAt.Sub(v.DNSStartAt)),               // tcp connection
-		formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),   // server processing
-		formatDuration(time.Now().Sub(v.GotConnAt)),                 // content transfer
-		formatDuration2(v.DNSDoneAt.Sub(v.DNSDoneAt)),               // name lookup
-		formatDuration2(v.GotConnAt.Sub(v.DNSStartAt)),              // connect
-		formatDuration2(v.GotFirstResponseByteAt.Sub(v.DNSStartAt)), // start transfer
-		formatDuration2(time.Now().Sub(v.DNSStartAt)),               // total
-	)
+func (v *Visitor) PrintTraceTimes(ishttps bool) {
+	if ishttps {
+		fmt.Println(colored.Blue(fmt.Sprintf(
+			HttpsRequestTemplate,
+			formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),                   // dns lookup
+			formatDuration(v.ConnectDoneAt.Sub(v.ConnectStartAt)),           // tcp connection
+			formatDuration(v.TLSHandshakeDoneAt.Sub(v.TLSHandshakeStartAt)), // tls handshake
+			formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),       // server processing
+			formatDuration(time.Now().Sub(v.GotFirstResponseByteAt)),        // content transfer
+			formatDuration2(v.DNSDoneAt.Sub(v.DNSStartAt)),                  // name lookup
+			formatDuration2(v.ConnectDoneAt.Sub(v.DNSStartAt)),              // connect
+			formatDuration2(v.GotConnAt.Sub(v.DNSStartAt)),                  // pre transfer
+			formatDuration2(v.GotFirstResponseByteAt.Sub(v.DNSStartAt)),     // start transfer
+			formatDuration2(time.Now().Sub(v.DNSStartAt)),                   // total
+		)))
+	} else {
+		fmt.Println(colored.Blue(fmt.Sprintf(
+			HttpRequestTemplate,
+			formatDuration(v.DNSDoneAt.Sub(v.DNSStartAt)),               // dns lookup
+			formatDuration(v.GotConnAt.Sub(v.DNSStartAt)),               // tcp connection
+			formatDuration(v.GotFirstResponseByteAt.Sub(v.GotConnAt)),   // server processing
+			formatDuration(time.Now().Sub(v.GotConnAt)),                 // content transfer
+			formatDuration2(v.DNSDoneAt.Sub(v.DNSDoneAt)),               // name lookup
+			formatDuration2(v.GotConnAt.Sub(v.DNSStartAt)),              // connect
+			formatDuration2(v.GotFirstResponseByteAt.Sub(v.DNSStartAt)), // start transfer
+			formatDuration2(time.Now().Sub(v.DNSStartAt)),               // total
+		)))
+	}
 	fmt.Println()
 }
